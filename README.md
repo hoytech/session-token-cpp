@@ -37,7 +37,7 @@ auto token = SessionToken::Generator::with_entropy(256).get();
 ### Custom alphabet and length
 
 ```cpp
-auto token = SessionToken::Generator::with_length(100, "ACGT").get();
+auto token = SessionToken::Generator::with_length(100000000, "ACGT").get();
 // AGTACTTAGCAATCAGCTGGTTCATGGTTGCCCCCATAG...
 ```
 
@@ -109,13 +109,15 @@ SessionToken::Generator::seed_size         // 32
 
 Developers must choose whether a single token generator will be kept around and used to generate all tokens, or if a new `SessionToken::Generator` object will be created every time a token is needed. This library accesses `getrandom()` in its constructor for seeding purposes, but not subsequently while generating tokens.
 
-Generally speaking the generator should be kept around and re-used. Probably the most important reason for this is that generating a new token from an existing generator cannot fail due to resource exhaustion. Creating a new `SessionToken::Generator` object for every token can fail because the constructor needs to call `getrandom()`. In these events a C++ exception will be thrown.
+Generally speaking the generator should be kept around and re-used. Probably the most important reason for this is that generating a new token from an existing generator cannot fail due to resource exhaustion. Depending on the platform, creating a new `SessionToken::Generator` object could fail (ie because it may need to `/dev/urandom` but be out of file descriptors, although this is not a concern on linux because it uses `getrandom()`). In these events a C++ exception will be thrown.
 
-Programs that re-use a generator are more likely to be portable to `chroot`ed environments where `/dev/urandom` may not be accessible. Finally, accessing the kernel's random source frequently is inefficient because it requires making system calls.
+Programs that re-use a generator are more likely to be portable to `chroot`ed environments where `/dev/urandom` may not be accessible (if relevant for your platform).
 
-On the other hand, re-using a generator may be undesirable because servers are typically started immediately after a system reboot and the kernel's randomness pool might be poorly seeded at that point. Similarly, when starting a virtual machine a previously used entropy pool state may be restored. In these cases all subsequently generated tokens will be derived from a weak/predictable seed. For this reason, you might choose to defer creating the generator until the first request actually comes in, periodically re-create the generator object, and/or manually handle seeding in some other way.
+Finally, accessing the kernel's random source frequently is inefficient because it requires making system calls.
 
-This library will always throw an exception if it can't seed itself, ensuring you never get tokens based on uninitialized memory.
+On the other hand, re-using a generator may be undesirable because servers are typically started immediately after a system reboot and the kernel's randomness pool might be poorly seeded at that point. Similarly, when starting a virtual machine a previously used entropy pool state may be restored. If an attacker is able to peek at the memory of get a glimpse into the private memory of a running process, it can predict all future tokens. For these reasons, you might choose to defer creating the generator until the first request actually comes in, periodically re-create the generator object, and/or manually handle seeding in some other way.
+
+This library will always throw an exception if it can't securely seed itself.
 
 ## Custom Alphabets
 
@@ -215,13 +217,27 @@ P = alphabet_size / next_power_of_two(alphabet_size)
 
 For example, with the default base-62 alphabet `P` is `62/64`.
 
+In order to find the average number of bytes consumed for each character, calculate the expected value `E`. There is a probability `P` that the first byte will be used and therefore only one byte will be consumed, and a probability `1 - P` that `1 + E` bytes will be consumed:
+
+```
+E = P*1 + (1 - P)*(1 + E)
+
+E = P + 1 + E - P - P*E
+
+0 = 1 - P*E
+
+P*E = 1
+
+E = 1/P
+```
+
 The expected number of bytes consumed for each character is `E = 1/P`. For the default base-62 alphabet:
 
 ```
-E = 1/(62/64) = 64/62 ≈ 1.032
+E = 1/(62/64) = 64/62 ≈ 1.0323
 ```
 
-Because of the next power of two masking optimisation, `E` will always be less than `2`. In the worst case scenario of an alphabet with 129 characters, `E` is roughly `1.98`.
+Because of the next power of two masking optimisation, `E` will always be less than `2`. In the worst case scenario of an alphabet with 129 characters, `E` is roughly `1.9845`.
 
 This minor inefficiency isn't an issue because the ChaCha20 implementation is quite fast and this library is very thrifty in how it uses ChaCha20's output.
 
@@ -241,7 +257,7 @@ Due to the byte-oriented design, alphabets can't be larger than 256 characters. 
 
 ## Seeding
 
-This library is designed to always seed itself from your kernel's secure random number source (`getrandom()`). You should never need to seed it yourself.
+This library is designed to always seed itself from your kernel's secure random number source (ie `getrandom()`). You should never need to seed it yourself.
 
 However if you know what you're doing you can pass in a custom seed as a 32-byte array. For example, here is how to create a "null seeded" generator:
 
@@ -265,6 +281,8 @@ This library currently only supports Linux, as it uses the `getrandom()` system 
 
 ## License
 
-This module is licensed under the same terms as the original Session::Token (same terms as Perl itself).
+(C) 2012-2026 Doug Hoyte
+
+This library is licensed under the MIT license.
 
 ChaCha20 implementation from [github.com/983/ChaCha20](https://github.com/983/ChaCha20).
