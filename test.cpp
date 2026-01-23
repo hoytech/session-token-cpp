@@ -66,7 +66,7 @@ void test_custom_entropy() {
     auto gen = SessionToken::Generator::with_entropy(256);
     std::string token = gen.get();
 
-    // ceil(256 / log2(62)) = ceil(256 / 5.954) = ceil(43.0) = 43
+    // ceil(256 / log2(62)) = ceil(256 / 5.9542) = ceil(42.9949) = 43
     assert(token.length() == 43);
     std::cout << "  Token: " << token << " (length: " << token.length() << ")" << std::endl;
     std::cout << "  PASSED: Custom entropy produces correct length" << std::endl;
@@ -137,6 +137,16 @@ void test_alphabet_validation() {
     }
     assert(caught);
     std::cout << "  PASSED: Rejects empty alphabet" << std::endl;
+
+    // Alphabet too big
+    caught = false;
+    try {
+        SessionToken::Generator gen(std::string(257, 'A'));
+    } catch (const std::invalid_argument&) {
+        caught = true;
+    }
+    assert(caught);
+    std::cout << "  PASSED: Rejects alphabet too large" << std::endl;
 }
 
 void test_length_entropy_mutual_exclusion() {
@@ -181,24 +191,24 @@ void test_token_uniformity() {
     std::cout << "Testing token character distribution (basic uniformity check)..." << std::endl;
 
     // Use a small alphabet to make distribution easier to check
-    std::string alphabet = "ABCD";
+    std::string alphabet = "ABCDE";
     auto gen = SessionToken::Generator::with_length(10000, alphabet);
 
     std::string token = gen.get();
-    std::array<int, 4> counts = {0, 0, 0, 0};
+    std::array<int, 5> counts = {0, 0, 0, 0, 0};
 
     for (char c : token) {
         counts[c - 'A']++;
     }
 
     std::cout << "  Distribution over 10000 characters:" << std::endl;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double pct = (counts[i] / 10000.0) * 100.0;
         std::cout << "    " << static_cast<char>('A' + i) << ": " << counts[i]
                   << " (" << pct << "%)" << std::endl;
-        // Each should be roughly 25% (2500 +/- some variance)
-        // Allow 20-30% range for reasonable statistical variance
-        assert(counts[i] > 2000 && counts[i] < 3000);
+        // Each should be roughly 20% (2000 +/- some variance)
+        // Allow 18-22% range for reasonable statistical variance
+        assert(counts[i] > 1800 && counts[i] < 2200);
     }
 
     std::cout << "  PASSED: Character distribution is reasonably uniform" << std::endl;
