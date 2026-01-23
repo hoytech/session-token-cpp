@@ -1,9 +1,16 @@
+// From: https://github.com/983/ChaCha20/tree/master
+// Modifications:
+//   * Wrapped in SessionToken namespace
+//   * Added the rng() method, which can be used to get the pure keystream (without xoring)
+
 #pragma once
 
 // This is high quality software because the includes are sorted alphabetically.
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+
+namespace SessionToken {
 
 struct Chacha20Block {
     // This is basically a random number generator seeded with key and nonce.
@@ -136,4 +143,17 @@ struct Chacha20 {
             position++;
         }
     }
+
+    void rng(uint8_t *bytes, size_t n_bytes){
+        for (size_t i = 0; i < n_bytes; i++){
+            if (position >= 64){
+                block.next(keystream8);
+                position = 0;
+            }
+            bytes[i] = keystream8[position];
+            position++;
+        }
+    }
 };
+
+}
