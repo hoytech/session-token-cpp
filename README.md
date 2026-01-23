@@ -1,8 +1,8 @@
-# Session::Token for C++
-
-Secure, efficient, simple random session token generation.
+# SessionToken C++: Secure, efficient, simple random session token generation
 
 A modern C++20 header-only library for creating session tokens, password reset codes, temporary passwords, random identifiers, and anything else you can think of.
+
+This is an LLM-assisted port of the [Session::Token Perl module](https://github.com/hoytech/Session-Token).
 
 ## Synopsis
 
