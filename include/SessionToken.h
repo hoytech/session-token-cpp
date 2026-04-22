@@ -9,7 +9,17 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <bcrypt.h>
+#elif defined(__linux__)
 #include <sys/random.h>
+#elif defined(__APPLE__)
+#include <stdlib.h>
+#else
+#include <fstream>
+#endif
 
 #include "chacha20.hpp"
 
@@ -46,10 +56,24 @@ private:
 
     static std::array<uint8_t, seed_size> generate_seed() {
         std::array<uint8_t, seed_size> seed;
+#ifdef _WIN32
+        NTSTATUS status = BCryptGenRandom(nullptr, seed.data(), static_cast<ULONG>(seed.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+        if (status != 0) {
+            throw std::runtime_error("Failed to get random bytes from BCryptGenRandom()");
+        }
+#elif defined(__linux__)
         ssize_t result = getrandom(seed.data(), seed.size(), 0);
         if (result != static_cast<ssize_t>(seed.size())) {
             throw std::runtime_error("Failed to get random bytes from getrandom()");
         }
+#elif defined(__APPLE__)
+        arc4random_buf(seed.data(), seed.size());
+#else
+        std::ifstream urandom("/dev/urandom", std::ios::binary);
+        if (!urandom || !urandom.read(reinterpret_cast<char*>(seed.data()), seed.size())) {
+            throw std::runtime_error("Failed to read from /dev/urandom");
+        }
+#endif
         return seed;
     }
 
