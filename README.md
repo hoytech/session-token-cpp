@@ -43,7 +43,7 @@ auto token = SessionToken::Generator::with_length(100000000, "ACGT").get();
 
 ## Description
 
-When a `SessionToken::Generator` object is created, 32 bytes are read from `getrandom()` (Linux). These bytes are used to seed the ChaCha20 stream cipher which serves as a cryptographically secure pseudo-random number generator.
+When a `SessionToken::Generator` object is created, 32 bytes are read from the kernel's secure random number generator. These bytes are used to seed the ChaCha20 stream cipher which serves as a cryptographically secure pseudo-random number generator.
 
 Once a generator is created, you can repeatedly call the `get()` method on the generator object and it will return a new token each time.
 
@@ -66,7 +66,7 @@ Requires a C++20 compatible compiler (tested with g++).
 ### Constructors and Factory Methods
 
 ```cpp
-// Default: 128-bit entropy, base-62 alphabet, seeded from getrandom()
+// Default: 128-bit entropy, base-62 alphabet
 SessionToken::Generator gen;
 
 // Custom alphabet
@@ -105,11 +105,13 @@ SessionToken::Generator::default_entropy   // 128
 SessionToken::Generator::seed_size         // 32
 ```
 
-## Generators and getrandom()
+## Generators and randomness
 
-Developers must choose whether a single token generator will be kept around and used to generate all tokens, or if a new `SessionToken::Generator` object will be created every time a token is needed. This library accesses `getrandom()` in its constructor for seeding purposes, but not subsequently while generating tokens.
+Developers must choose whether a single token generator will be kept around and used to generate all tokens, or if a new `SessionToken::Generator` object will be created every time a token is needed. This library accesses the kernel's random number source in its constructor for seeding purposes, but not subsequently while generating tokens.
 
-Generally speaking the generator should be kept around and re-used. Probably the most important reason for this is that generating a new token from an existing generator cannot fail due to resource exhaustion. Depending on the platform, creating a new `SessionToken::Generator` object could fail (ie because it may need to `/dev/urandom` but be out of file descriptors, although this is not a concern on linux because it uses `getrandom()`). In these events a C++ exception will be thrown.
+On Linux, it uses `getrandom()`. On Windows it uses `BCryptGenRandom(..., BCRYPT_USE_SYSTEM_PREFERRED_RNG)`. On Mac OS X it uses `arc4random_buf()`. On other systems, it attempts to read from `/dev/urandom`.
+
+Generally speaking the generator should be kept around and re-used. Probably the most important reason for this is that generating a new token from an existing generator cannot fail due to resource exhaustion. Depending on the platform, creating a new `SessionToken::Generator` object could fail (ie because it needs to open `/dev/urandom` but is out of file descriptors). If a generator object cannot be created, a C++ exception will be thrown.
 
 Programs that re-use a generator are more likely to be portable to `chroot`ed environments where `/dev/urandom` may not be accessible (if relevant for your platform).
 
@@ -257,7 +259,7 @@ Due to the byte-oriented design, alphabets can't be larger than 256 characters. 
 
 ## Seeding
 
-This library is designed to always seed itself from your kernel's secure random number source (ie `getrandom()`). You should never need to seed it yourself.
+This library is designed to always seed itself from your kernel's secure random number source. You should never need to seed it yourself.
 
 However if you know what you're doing you can pass in a custom seed as a 32-byte array. For example, here is how to create a "null seeded" generator:
 
@@ -269,10 +271,6 @@ auto gen = SessionToken::Generator::with_seed(seed);
 This is useful for testing to get reproducible output, but obviously don't do this in production because the generated tokens will be the same every time your program is run.
 
 One valid reason for manually seeding is if you have some reason to believe that there isn't enough entropy in your kernel's randomness pool. In this case you should acquire your own seed data from somewhere trustworthy.
-
-## Platform Support
-
-This library currently only supports Linux, as it uses the `getrandom()` system call for seeding.
 
 ## See Also
 
